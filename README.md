@@ -1,30 +1,26 @@
 # WarnAI
 
-WarnAI is a production-ready local-first workspace intelligence service. It ingests source repositories, normalizes code into compact Markdown, indexes the content with deterministic NLP lexical retrieval, and exposes operational analytics without sending data to a cloud API.
+WarnAI is a complete Laravel 11 + FastAPI workspace intelligence product. Laravel is the public web orchestrator and dashboard; the private Python service handles normalization, local NLP, hybrid retrieval, and analytics.
 
-## Capabilities
+## Product flow
 
-- **Natural language processing:** boilerplate/comment cleanup, whitespace compression, token estimation, and BM25 lexical retrieval over normalized Markdown.
-- **Deep learning ready:** the service boundary is designed for local embedding inference; the current engine remains deterministic and lightweight for offline deployments, while the retrieval API can be extended with ONNX/`sentence-transformers` vectors without changing clients.
-- **Data analytics:** document count, query volume, estimated token footprint, average document size, processing latency, and reduction-ready normalized output metrics.
-- **Professional web UI:** responsive dashboard served from the engine with upload, indexing, search, health, and live metrics.
-- **Privacy:** no external API keys, no telemetry, and all processing happens inside the deployment.
+1. Open the Laravel dashboard at `http://localhost`.
+2. Upload a ZIP repository or source file.
+3. Laravel validates the upload and forwards it to the internal AI engine.
+4. The engine removes boilerplate, converts supported source files to Markdown, and indexes them with BM25 plus optional local `all-MiniLM-L6-v2` embeddings.
+5. Search questions return ranked context snippets while the dashboard exposes document, query, token, and retrieval-mode analytics.
 
-## Run locally
+## Architecture
 
-```bash
-cd ai-engine-python
-python -m pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8001
-```
+- `backend-laravel`: Laravel 11 routes, controller, Blade dashboard, validation, CSRF, and internal HTTP orchestration.
+- `ai-engine-python`: FastAPI normalization, NLP cleanup, local deep-learning embedding path, hybrid retrieval, and metrics.
+- `docker-compose.yml`: PostgreSQL/pgvector, Redis, Python engine, Laravel PHP-FPM, and Nginx.
 
-Open http://localhost:8001. API endpoints: `GET /health`, `POST /normalize` (ZIP or source file), `POST /search`, and `GET /analytics`.
-
-## Run with Docker
+## Run
 
 ```bash
 copy .env.example .env
 docker compose up --build
 ```
 
-Runtime files and secrets are excluded through `.gitignore`; only `.env.example` is tracked.
+Then open http://localhost. Runtime secrets, virtual environments, cache, logs, and generated storage are excluded by `.gitignore`.
