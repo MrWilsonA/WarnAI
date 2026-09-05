@@ -7,7 +7,8 @@ from typing import Optional, List
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, PlainTextResponse
+import io
+from fastapi.responses import HTMLResponse, PlainTextResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
 from .normalizer.core import normalize_path
@@ -35,6 +36,7 @@ hybrid_index = HybridIndex(alpha=0.45, min_score_threshold=0.08)
 analytics_engine = AnalyticsEngine()
 cached_skeleton = ""
 cached_files_summary: List[dict] = []
+processed_files_map: dict = {}
 
 class SearchQuery(BaseModel):
     query: str
@@ -72,8 +74,15 @@ def dashboard_status():
     return "<h1>WarnAI AI Engine Active</h1>"
 
 @app.post("/normalize")
-async def normalize(file: UploadFile = File(...)):
-    global cached_skeleton, cached_files_summary
+async def normalize(file: UploadFile = File(...), replace: bool = False):
+    global cached_skeleton, cached_files_summary, processed_files_map, hybrid_index, analytics_engine
+
+    if replace:
+        hybrid_index = HybridIndex(alpha=0.45, min_score_threshold=0.08)
+        analytics_engine = AnalyticsEngine()
+        processed_files_map = {}
+        cached_files_summary = []
+        cached_skeleton = ""
 
     started = time.perf_counter()
     data = await file.read()
@@ -97,7 +106,6 @@ async def normalize(file: UploadFile = File(...)):
             relative_base = Path(td)
 
         for f in files_to_process:
-            # Lewatkan direktori internal git, vendor besar, atau binary tak didukung
             parts = f.relative_to(relative_base).parts
             if any(p in {'.git', 'node_modules', 'vendor', '__pycache__', '.idea', '.vscode'} for p in parts):
                 continue
@@ -105,6 +113,7 @@ async def normalize(file: UploadFile = File(...)):
             doc_info = normalize_path(f, relative_to=relative_base)
             if doc_info:
                 processed_files.append(doc_info)
+                processed_files_map[doc_info['path']] = doc_info
                 hybrid_index.add_document(doc_info)
 
     if not processed_files:
@@ -114,7 +123,7 @@ async def normalize(file: UploadFile = File(...)):
     hybrid_index.rebuild_indices()
 
     # Generate project_skeleton.md
-    cached_skeleton = generate_skeleton(processed_files)
+    cached_skeleton = generate_skeleton(list(processed_files_map.values()))
     cached_files_summary = [
         {
             'path': f['path'],
@@ -124,7 +133,7 @@ async def normalize(file: UploadFile = File(...)):
             'chunks': f['total_chunks'],
             'tokens': f['estimated_tokens']
         }
-        for f in processed_files
+        for f in processed_files_map.values()
     ]
 
     elapsed_ms = round((time.perf_counter() - started) * 1000.0, 2)
@@ -133,13 +142,72 @@ async def normalize(file: UploadFile = File(...)):
     tokenomics = analytics_engine.get_tokenomics_summary()
 
     return {
-        "files_count": len(processed_files),
+        "files_count": len(processed_files_map),
         "total_chunks": len(hybrid_index.chunks),
         "elapsed_ms": elapsed_ms,
         "tokenomics": tokenomics,
         "skeleton_preview": cached_skeleton[:600] + ("\n…" if len(cached_skeleton) > 600 else ""),
-        "files": cached_files_summary[:20]
+        "files": cached_files_summary[:50]
     }
+
+@app.post("/workspace/reset")
+def reset_workspace():
+    global cached_skeleton, cached_files_summary, processed_files_map, hybrid_index, analytics_engine
+    hybrid_index = HybridIndex(alpha=0.45, min_score_threshold=0.08)
+    analytics_engine = AnalyticsEngine()
+    processed_files_map = {}
+    cached_files_summary = []
+    cached_skeleton = ""
+    return {"status": "ok", "message": "Workspace cleared. You can start a clean new project."}
+
+@app.get("/export/bundle")
+def export_bundle():
+    """Download single unified Markdown bundle of the entire workspace."""
+    if not processed_files_map and not cached_skeleton:
+        raise HTTPException(404, "No ingested files available to export.")
+
+    lines = ["# WarnAI Workspace Unified Context Bundle\n\n"]
+    if cached_skeleton:
+        lines.append(f"## Architecture Skeleton\n\n{cached_skeleton}\n\n---\n\n")
+
+    lines.append("## Normalized Documents & Source Code\n\n")
+    for path, f in processed_files_map.items():
+        lines.append(f"{f['markdown']}\n\n---\n\n")
+
+    content = "".join(lines)
+    return Response(
+        content=content,
+        media_type="text/markdown",
+        headers={"Content-Disposition": "attachment; filename=warnai_context_bundle.md"}
+    )
+
+@app.get("/export/zip")
+def export_zip():
+    """Download all normalized files packaged in a clean Markdown ZIP."""
+    if not processed_files_map:
+        raise HTTPException(404, "No ingested files available to export.")
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as z:
+        if cached_skeleton:
+            z.writestr("project_skeleton.md", cached_skeleton)
+        for path, f in processed_files_map.items():
+            clean_path = path if path.endswith('.md') else f"{path}.md"
+            z.writestr(clean_path, f['markdown'])
+
+    zip_buffer.seek(0)
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=warnai_normalized_markdown.zip"}
+    )
+
+@app.get("/file/markdown")
+def get_file_markdown(path: str):
+    f = processed_files_map.get(path)
+    if not f:
+        raise HTTPException(404, f"File '{path}' not found in current workspace.")
+    return {"path": path, "markdown": f["markdown"]}
 
 @app.post("/search")
 def search(payload: SearchQuery):

@@ -36,6 +36,10 @@
             </div>
 
             <div class="header-badges">
+                <button id="btn-reset-workspace" class="btn-secondary" title="Clear current workspace assets to start fresh project" style="padding: 5px 12px; font-size: 11px;">
+                    <i data-lucide="folder-plus"></i>
+                    <span>New Project</span>
+                </button>
                 <div class="telemetry-pill">
                     <i data-lucide="cpu"></i>
                     <span>ONNX 384d</span>
@@ -167,14 +171,24 @@
                 </div>
 
                 <div class="upload-actions">
-                    <label class="toggle-checkbox">
-                        <input type="checkbox" id="async-checkbox">
-                        <span class="toggle-switch"></span>
-                        <span class="toggle-label">
-                            <strong>Asynchronous Background Worker</strong>
-                            <small>Queue parsing job through Redis + Database worker for massive repositories</small>
-                        </span>
-                    </label>
+                    <div style="display:flex; flex-direction:column; gap:10px;">
+                        <label class="toggle-checkbox">
+                            <input type="checkbox" id="replace-checkbox" checked>
+                            <span class="toggle-switch"></span>
+                            <span class="toggle-label">
+                                <strong>Start Fresh Project (Replace Workspace)</strong>
+                                <small>Clears previously indexed assets so projects don't merge together</small>
+                            </span>
+                        </label>
+                        <label class="toggle-checkbox">
+                            <input type="checkbox" id="async-checkbox">
+                            <span class="toggle-switch"></span>
+                            <span class="toggle-label">
+                                <strong>Asynchronous Background Worker</strong>
+                                <small>Queue parsing job through Redis + Database worker for massive repositories</small>
+                            </span>
+                        </label>
+                    </div>
                     
                     <button id="btn-upload" class="btn-primary" disabled>
                         <i data-lucide="zap"></i>
@@ -187,10 +201,20 @@
 
             <!-- Ingested Files Table Preview -->
             <div id="ingested-files-card" class="panel-card" style="display:none; margin-top: 24px;">
-                <div class="panel-header">
+                <div class="panel-header" style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;">
                     <div class="panel-header-info">
                         <h3 class="panel-title"><i data-lucide="layers"></i> Processed Repository Assets</h3>
                         <p class="panel-desc">File-by-file boilerplate compression, chunking boundaries, and token metrics.</p>
+                    </div>
+                    <div class="export-actions" style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <a href="/api/export/zip" class="btn-secondary" title="Download all files converted to clean Markdown in a single ZIP">
+                            <i data-lucide="archive"></i>
+                            <span>Download Markdown ZIP</span>
+                        </a>
+                        <a href="/api/export/bundle" class="btn-secondary" title="Download single combined Markdown context bundle">
+                            <i data-lucide="file-text"></i>
+                            <span>Download Bundle (.md)</span>
+                        </a>
                     </div>
                 </div>
                 <div class="table-wrapper">
@@ -203,6 +227,7 @@
                                 <th>Reduction</th>
                                 <th>Chunks</th>
                                 <th>Tokens</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody id="ingested-files-body"></tbody>
@@ -460,6 +485,28 @@
                 </div>
             </div>
         </section>
+    </div>
+
+    <!-- Markdown File Preview Modal -->
+    <div id="markdown-modal" class="modal-backdrop" style="display:none;">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-title-wrap">
+                    <i data-lucide="file-text" style="color:var(--amber-400);"></i>
+                    <span id="modal-filename" style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#FFFFFF;">Clean Markdown View</span>
+                </div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <button id="btn-copy-modal" class="btn-secondary" style="padding:4px 10px; font-size:11px;">
+                        <i data-lucide="copy"></i>
+                        <span>Copy Markdown</span>
+                    </button>
+                    <button id="btn-close-modal" class="modal-close-btn" style="background:transparent; border:none; color:var(--text-muted); font-size:20px; cursor:pointer; padding:0 6px;">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body" style="padding:16px;">
+                <pre id="modal-content" style="font-family:var(--font-mono); font-size:12px; line-height:1.6; color:#CBD5E1; background:var(--bg-input); padding:16px; border-radius:var(--radius-sm); max-height:550px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;">Loading clean markdown…</pre>
+            </div>
+        </div>
     </div>
 
     <!-- Application Script -->

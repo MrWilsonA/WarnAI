@@ -111,17 +111,76 @@ class WorkspaceController extends Controller
             ]);
         }
 
+        $replace = $request->boolean('replace', false);
+
         // Mode sinkron
         try {
             $response = Http::timeout(300)
                 ->attach('file', fopen($realPath, 'r'), $fileName)
-                ->post("{$this->aiEngineUrl}/normalize");
+                ->post("{$this->aiEngineUrl}/normalize?replace=" . ($replace ? 'true' : 'false'));
 
             return response()->json($response->json(), $response->status());
         } catch (\Throwable $e) {
             return response()->json([
                 'message' => 'Failed to reach AI engine for normalization: ' . $e->getMessage()
             ], 502);
+        }
+    }
+
+    public function resetWorkspace(): JsonResponse
+    {
+        try {
+            $response = Http::timeout(10)->post("{$this->aiEngineUrl}/workspace/reset");
+            return response()->json($response->json(), $response->status());
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'Failed to reset workspace: ' . $e->getMessage()], 502);
+        }
+    }
+
+    public function exportBundle()
+    {
+        try {
+            $response = Http::timeout(60)->get("{$this->aiEngineUrl}/export/bundle");
+            if ($response->successful()) {
+                return response($response->body(), 200, [
+                    'Content-Type' => 'text/markdown',
+                    'Content-Disposition' => 'attachment; filename="warnai_context_bundle.md"'
+                ]);
+            }
+            return response()->json(['message' => 'No files in workspace to export.'], 404);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'Failed to export bundle: ' . $e->getMessage()], 502);
+        }
+    }
+
+    public function exportZip()
+    {
+        try {
+            $response = Http::timeout(120)->get("{$this->aiEngineUrl}/export/zip");
+            if ($response->successful()) {
+                return response($response->body(), 200, [
+                    'Content-Type' => 'application/zip',
+                    'Content-Disposition' => 'attachment; filename="warnai_normalized_markdown.zip"'
+                ]);
+            }
+            return response()->json(['message' => 'No files in workspace to export.'], 404);
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'Failed to export zip: ' . $e->getMessage()], 502);
+        }
+    }
+
+    public function fileMarkdown(Request $request): JsonResponse
+    {
+        $path = $request->query('path');
+        if (!$path) {
+            return response()->json(['message' => 'Path parameter is required'], 400);
+        }
+
+        try {
+            $response = Http::timeout(10)->get("{$this->aiEngineUrl}/file/markdown", ['path' => $path]);
+            return response()->json($response->json(), $response->status());
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'Failed to get file markdown: ' . $e->getMessage()], 502);
         }
     }
 

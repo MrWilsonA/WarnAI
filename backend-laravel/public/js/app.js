@@ -156,6 +156,7 @@ $('btn-upload')?.addEventListener('click', async () => {
         const formData = new FormData();
         formData.append('file', state.selectedFile);
         if (isAsync) formData.append('async', '1');
+        if ($('replace-checkbox')?.checked) formData.append('replace', '1');
 
         const result = await api('/api/normalize', {
             method: 'POST',
@@ -216,10 +217,87 @@ const renderFilesTable = (files) => {
             <td style="font-family:var(--font-mono); color:var(--signal-green); font-weight:700;">-${f.reduction_pct}%</td>
             <td style="font-family:var(--font-mono);">${f.chunks}</td>
             <td style="font-family:var(--font-mono);">${f.tokens.toLocaleString()}</td>
+            <td>
+                <button class="btn-preview-file" data-path="${escapeHtml(f.path)}">
+                    <i data-lucide="eye"></i> <span>View</span>
+                </button>
+            </td>
         </tr>
     `).join('');
+
+    tbody.querySelectorAll('.btn-preview-file').forEach(btn => {
+        btn.addEventListener('click', () => {
+            openMarkdownModal(btn.dataset.path);
+        });
+    });
+
     renderIcons();
 };
+
+const openMarkdownModal = async (path) => {
+    const modal = $('markdown-modal');
+    if (!modal) return;
+    $('modal-filename').textContent = path;
+    $('modal-content').textContent = 'Fetching clean markdown content…';
+    modal.style.display = 'flex';
+    renderIcons();
+
+    try {
+        const data = await api(`/api/file/markdown?path=${encodeURIComponent(path)}`);
+        $('modal-content').textContent = data.markdown || 'No content available.';
+    } catch (err) {
+        $('modal-content').textContent = `Failed to load markdown: ${err.message}`;
+    }
+};
+
+$('btn-close-modal')?.addEventListener('click', () => {
+    const modal = $('markdown-modal');
+    if (modal) modal.style.display = 'none';
+});
+
+$('markdown-modal')?.addEventListener('click', (e) => {
+    if (e.target === $('markdown-modal')) {
+        $('markdown-modal').style.display = 'none';
+    }
+});
+
+$('btn-copy-modal')?.addEventListener('click', () => {
+    const text = $('modal-content').textContent;
+    navigator.clipboard.writeText(text);
+    const btn = $('btn-copy-modal');
+    const orig = btn.innerHTML;
+    btn.innerHTML = `<i data-lucide="check"></i> <span>Copied!</span>`;
+    renderIcons();
+    setTimeout(() => {
+        btn.innerHTML = orig;
+        renderIcons();
+    }, 2000);
+});
+
+// Workspace Reset Handler
+$('btn-reset-workspace')?.addEventListener('click', async () => {
+    if (!confirm('Clear current workspace? This will remove all indexed files so you can start a clean new project.')) {
+        return;
+    }
+    try {
+        const res = await api('/api/workspace/reset', { method: 'POST' });
+        alert(res.message || 'Workspace reset.');
+        $('ingested-files-card').style.display = 'none';
+        $('upload-feedback').innerHTML = '';
+        $('skeleton-display').textContent = '# Workspace cleared. Ingest a repository to view its structural skeleton.';
+        $('search-results').innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon-wrap"><i data-lucide="search"></i></div>
+                <h4>Awaiting Query Execution</h4>
+                <p>Enter a query or select a preset above to retrieve ranked, pruned context chunks.</p>
+            </div>
+        `;
+        await refreshStatus();
+        renderIcons();
+    } catch (err) {
+        alert(`Failed to reset workspace: ${err.message}`);
+    }
+});
 
 // Hybrid Search
 const executeSearch = async () => {

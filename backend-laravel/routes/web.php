@@ -13,4 +13,8 @@ Route::prefix('api')->group(function () {
     Route::post('/context/assemble', [WorkspaceController::class, 'assembleContext']);
     Route::post('/infer', [WorkspaceController::class, 'infer']);
     Route::get('/skeleton', [WorkspaceController::class, 'skeleton']);
+    Route::post('/workspace/reset', [WorkspaceController::class, 'resetWorkspace']);
+    Route::get('/export/bundle', [WorkspaceController::class, 'exportBundle']);
+    Route::get('/export/zip', [WorkspaceController::class, 'exportZip']);
+    Route::get('/file/markdown', [WorkspaceController::class, 'fileMarkdown']);
 });
