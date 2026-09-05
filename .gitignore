@@ -7,3 +7,7 @@ storage/
 *.log
 .DS_Store
 node_modules/
+vendor/
+backend-laravel/vendor/
+backend-laravel/bootstrap/cache/*
+!backend-laravel/bootstrap/cache/.gitignore

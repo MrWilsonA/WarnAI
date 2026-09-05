@@ -60,12 +60,14 @@ services:
     environment:
       - APP_NAME=warnai
       - APP_ENV=local
-      - APP_KEY=${APP_KEY:-base64:WarnAIAppKeyGeneratedForDevOnly12345=}
+      - APP_KEY=${APP_KEY:-base64:5k4+S//W6/3Ml/wot4NgPrbBbL+toxj7Lg1BFEvzs1Y=}
       - DB_HOST=postgres
       - DB_DATABASE=${DB_DATABASE:-warnai}
       - DB_USERNAME=${DB_USERNAME:-warnai_user}
       - DB_PASSWORD=${DB_PASSWORD:-secret}
-      - REDIS_HOST=redis
+      - QUEUE_CONNECTION=database
+      - CACHE_STORE=database
+      - SESSION_DRIVER=database
       - AI_ENGINE_URL=http://ai-engine:8001
     volumes:
       - ./backend-laravel:/var/www/html
@@ -84,7 +86,7 @@ services:
       dockerfile: ./docker/laravel/Dockerfile
     container_name: warnai_worker
     restart: unless-stopped
-    command: php artisan queue:work redis --queue=default,parsing,indexing --verbose --tries=3 --timeout=1200
+    command: php artisan queue:work database --queue=default,parsing,indexing --verbose --tries=3 --timeout=1200
     volumes:
       - ./backend-laravel:/var/www/html
       - shared_storage:/var/www/html/storage/app/shared
