@@ -3,7 +3,9 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\WorkspaceController;
 
-Route::get('/', [WorkspaceController::class, 'index']);
+Route::get('/', [WorkspaceController::class, 'splash']);
+Route::get('/workspace', [WorkspaceController::class, 'index']);
+Route::get('/dashboard', [WorkspaceController::class, 'index']);
 
 Route::prefix('api')->group(function () {
     Route::get('/health', [WorkspaceController::class, 'health']);

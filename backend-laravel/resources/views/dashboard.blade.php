@@ -27,12 +27,12 @@
         <!-- Top Navigation / Brand Header -->
         <header class="app-header">
             <div class="brand-section">
-                <div class="brand-logo-frame">
+                <a href="/" class="brand-logo-frame" title="Return to Splash Menu">
                     <img src="/images/logo.png" alt="WarnAI Emblem" class="brand-logo-img">
-                </div>
+                </a>
                 <div class="brand-info">
                     <div class="brand-title-row">
-                        <h1>WarnAI</h1>
+                        <h1><a href="/" style="color:inherit; text-decoration:none;">WarnAI</a></h1>
                         <span class="version-badge">v2.0-CORE</span>
                         <span class="arch-badge"><i data-lucide="shield-check"></i> AIR-GAPPED</span>
                     </div>
@@ -41,6 +41,10 @@
             </div>
 
             <div class="header-badges">
+                <a href="/" class="btn-secondary" title="Return to Splash Menu" style="padding: 5px 12px; font-size: 11px;">
+                    <i data-lucide="home"></i>
+                    <span>Splash Menu</span>
+                </a>
                 <button id="btn-reset-workspace" class="btn-secondary" title="Clear current workspace assets to start fresh project" style="padding: 5px 12px; font-size: 11px;">
                     <i data-lucide="folder-plus"></i>
                     <span>New Project</span>

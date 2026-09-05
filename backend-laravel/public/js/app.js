@@ -566,10 +566,35 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+// Tab Switching Utility
+const switchTab = (tabName) => {
+    const btn = document.querySelector(`.tab-btn[data-tab="${tabName}"]`);
+    const content = $(`tab-${tabName}`);
+    if (btn && content) {
+        $$('.tab-btn').forEach((b) => b.classList.remove('active'));
+        $$('.tab-content').forEach((c) => c.classList.remove('active'));
+        btn.classList.add('active');
+        content.classList.add('active');
+        state.activeTab = tabName;
+        if (tabName === 'skeleton') loadSkeleton();
+        if (tabName === 'analytics') loadAnalytics();
+        renderIcons();
+    }
+};
+
+const handleInitialHash = () => {
+    const hash = window.location.hash.replace('#', '');
+    if (['ingest', 'search', 'skeleton', 'inference', 'analytics'].includes(hash)) {
+        switchTab(hash);
+    }
+};
+
 // Initial bootstrap
 document.addEventListener('DOMContentLoaded', () => {
+    handleInitialHash();
     renderIcons();
     refreshStatus();
 });
+handleInitialHash();
 renderIcons();
 refreshStatus();

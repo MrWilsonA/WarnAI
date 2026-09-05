@@ -20,6 +20,11 @@ class WorkspaceController extends Controller
         $this->aiEngineUrl = config('services.ai_engine.url', env('AI_ENGINE_URL', 'http://ai-engine:8001'));
     }
 
+    public function splash(): View
+    {
+        return view('splash');
+    }
+
     public function index(): View
     {
         return view('dashboard');
