@@ -1,0 +1,11 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment: {POSTGRES_DB: ${DB_DATABASE:-warnai}, POSTGRES_USER: ${DB_USERNAME:-warnai_user}, POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}}
+    ports: ["5432:5432"]
+  redis: {image: redis:7-alpine, ports: ["6379:6379"]}
+  ai-engine:
+    build: {context: ./ai-engine-python, dockerfile: ../docker/python-engine/Dockerfile}
+    ports: ["8001:8001"]
+    depends_on: [postgres, redis]
+volumes: {pgdata: {}}
