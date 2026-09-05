@@ -1,21 +1,118 @@
 services:
+  # Database Utama & Vector Store
   postgres:
     image: pgvector/pgvector:pg16
-    environment: {POSTGRES_DB: ${DB_DATABASE:-warnai}, POSTGRES_USER: ${DB_USERNAME:-warnai_user}, POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}}
-    ports: ["5432:5432"]
-    volumes: [pgdata:/var/lib/postgresql/data]
-  redis: {image: redis:7-alpine, ports: ["6379:6379"]}
+    container_name: warnai_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-warnai}
+      POSTGRES_USER: ${DB_USERNAME:-warnai_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - warnai-network
+
+  # Antrean & In-memory Cache
+  redis:
+    image: redis:7-alpine
+    container_name: warnai_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - warnai-network
+
+  # Engine AI & Normalisasi (Python FastAPI)
   ai-engine:
-    build: {context: ./ai-engine-python, dockerfile: ../docker/python-engine/Dockerfile}
-    ports: ["8001:8001"]
-    depends_on: [postgres, redis]
+    build:
+      context: ./ai-engine-python
+      dockerfile: ../docker/python-engine/Dockerfile
+    container_name: warnai_ai_engine
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://${DB_USERNAME:-warnai_user}:${DB_PASSWORD:-secret}@postgres:5432/${DB_DATABASE:-warnai}
+      - REDIS_URL=redis://redis:6379/0
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+      - OLLAMA_URL=${OLLAMA_URL:-http://localhost:11434/api/generate}
+    volumes:
+      - ./ai-engine-python:/app
+      - shared_storage:/app/storage
+    ports:
+      - "8001:8001"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - warnai-network
+
+  # Web Orchestrator & API (Laravel)
   laravel-app:
-    build: {context: ./backend-laravel, dockerfile: ../docker/laravel/Dockerfile}
-    environment: {APP_ENV: local, APP_DEBUG: "true", AI_ENGINE_URL: http://ai-engine:8001}
-    depends_on: [ai-engine, postgres, redis]
+    build:
+      context: .
+      dockerfile: ./docker/laravel/Dockerfile
+    container_name: warnai_laravel
+    restart: unless-stopped
+    environment:
+      - APP_NAME=warnai
+      - APP_ENV=local
+      - APP_KEY=${APP_KEY:-base64:WarnAIAppKeyGeneratedForDevOnly12345=}
+      - DB_HOST=postgres
+      - DB_DATABASE=${DB_DATABASE:-warnai}
+      - DB_USERNAME=${DB_USERNAME:-warnai_user}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - REDIS_HOST=redis
+      - AI_ENGINE_URL=http://ai-engine:8001
+    volumes:
+      - ./backend-laravel:/var/www/html
+      - shared_storage:/var/www/html/storage/app/shared
+    depends_on:
+      - postgres
+      - redis
+      - ai-engine
+    networks:
+      - warnai-network
+
+  # Background Worker (Laravel Queue / Horizon)
+  laravel-worker:
+    build:
+      context: .
+      dockerfile: ./docker/laravel/Dockerfile
+    container_name: warnai_worker
+    restart: unless-stopped
+    command: php artisan queue:work redis --queue=default,parsing,indexing --verbose --tries=3 --timeout=1200
+    volumes:
+      - ./backend-laravel:/var/www/html
+      - shared_storage:/var/www/html/storage/app/shared
+    depends_on:
+      - laravel-app
+    networks:
+      - warnai-network
+
+  # Reverse Proxy
   nginx:
     image: nginx:alpine
-    ports: ["80:80"]
-    volumes: [./backend-laravel:/var/www/html:ro, ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro]
-    depends_on: [laravel-app]
-volumes: {pgdata: {}}
+    container_name: warnai_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./backend-laravel:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - laravel-app
+    networks:
+      - warnai-network
+
+networks:
+  warnai-network:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:
+  shared_storage:
