@@ -66,11 +66,12 @@ services:
       - DB_USERNAME=${DB_USERNAME:-warnai_user}
       - DB_PASSWORD=${DB_PASSWORD:-secret}
       - QUEUE_CONNECTION=database
-      - CACHE_STORE=database
-      - SESSION_DRIVER=database
+      - CACHE_STORE=file
+      - SESSION_DRIVER=cookie
       - AI_ENGINE_URL=http://ai-engine:8001
     volumes:
       - ./backend-laravel:/var/www/html
+      - ./docker/laravel/php.ini:/usr/local/etc/php/conf.d/custom.ini
       - shared_storage:/var/www/html/storage/app/shared
     depends_on:
       - postgres
@@ -89,6 +90,7 @@ services:
     command: php artisan queue:work database --queue=default,parsing,indexing --verbose --tries=3 --timeout=1200
     volumes:
       - ./backend-laravel:/var/www/html
+      - ./docker/laravel/php.ini:/usr/local/etc/php/conf.d/custom.ini
       - shared_storage:/var/www/html/storage/app/shared
     depends_on:
       - laravel-app
