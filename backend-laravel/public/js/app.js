@@ -1,4 +1,4 @@
-// WarnAI Frontend Application Logic
+// WarnAI Modern Frontend Application Logic
 const state = {
     activeTab: 'ingest',
     selectedFile: null,
@@ -7,6 +7,13 @@ const state = {
 
 const $ = (id) => document.getElementById(id);
 const $$ = (sel) => document.querySelectorAll(sel);
+
+// Icon re-initialization helper for dynamic DOM injection
+const renderIcons = () => {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
+};
 
 // Helper API caller
 const api = async (url, options = {}) => {
@@ -39,11 +46,21 @@ const updateMetrics = (data) => {
     const badge = $('engine-badge');
     const isOnline = data.status !== 'offline';
     badge.className = `status-badge ${isOnline ? '' : 'offline'}`;
-    badge.innerHTML = `<span class="pulse-dot"></span> ${isOnline ? 'ENGINE ONLINE' : 'ENGINE OFFLINE'}`;
+    badge.innerHTML = `
+        <span class="pulse-dot"></span>
+        <span class="status-label">${isOnline ? 'ENGINE ONLINE' : 'ENGINE OFFLINE'}</span>
+    `;
     
     if (data.retrieval_mode) {
-        $('engine-tag').textContent = data.retrieval_mode;
+        const engineTag = $('engine-tag');
+        if (engineTag) {
+            engineTag.innerHTML = `
+                <i data-lucide="git-merge"></i>
+                <span>${escapeHtml(data.retrieval_mode).toUpperCase()}</span>
+            `;
+        }
     }
+    renderIcons();
 };
 
 // Refresh Status & Analytics
@@ -55,7 +72,10 @@ const refreshStatus = async () => {
     } catch {
         const badge = $('engine-badge');
         badge.className = 'status-badge offline';
-        badge.innerHTML = '<span class="pulse-dot"></span> ENGINE OFFLINE';
+        badge.innerHTML = `
+            <span class="pulse-dot"></span>
+            <span class="status-label">ENGINE OFFLINE</span>
+        `;
     }
 };
 
@@ -72,6 +92,7 @@ $$('.tab-btn').forEach((btn) => {
 
         if (targetTab === 'skeleton') loadSkeleton();
         if (targetTab === 'analytics') loadAnalytics();
+        renderIcons();
     });
 });
 
@@ -79,44 +100,57 @@ $$('.tab-btn').forEach((btn) => {
 const dropzone = $('dropzone');
 const fileInput = $('file-input');
 
-dropzone.addEventListener('click', () => fileInput.click());
-dropzone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    dropzone.classList.add('dragover');
-});
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
-dropzone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropzone.classList.remove('dragover');
-    if (e.dataTransfer.files?.length) {
-        handleFileSelect(e.dataTransfer.files[0]);
-    }
-});
+if (dropzone && fileInput) {
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+    });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        if (e.dataTransfer.files?.length) {
+            handleFileSelect(e.dataTransfer.files[0]);
+        }
+    });
 
-fileInput.addEventListener('change', (e) => {
-    if (e.target.files?.length) {
-        handleFileSelect(e.target.files[0]);
-    }
-});
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files?.length) {
+            handleFileSelect(e.target.files[0]);
+        }
+    });
+}
 
 const handleFileSelect = (file) => {
     state.selectedFile = file;
     const mb = (file.size / (1024 * 1024)).toFixed(2);
-    $('selected-file-pill').innerHTML = `<span>📦</span> <b>${file.name}</b> (${mb} MB)`;
-    $('selected-file-pill').style.display = 'inline-flex';
+    const pill = $('selected-file-pill');
+    pill.innerHTML = `
+        <i data-lucide="file-archive"></i>
+        <span><strong>${escapeHtml(file.name)}</strong> (${mb} MB)</span>
+    `;
+    pill.style.display = 'inline-flex';
     $('btn-upload').disabled = false;
+    renderIcons();
 };
 
 // Upload & Normalize
-$('btn-upload').addEventListener('click', async () => {
+$('btn-upload')?.addEventListener('click', async () => {
     if (!state.selectedFile) return;
     const btn = $('btn-upload');
     const feedback = $('upload-feedback');
     const isAsync = $('async-checkbox')?.checked || false;
 
     btn.disabled = true;
-    btn.innerHTML = `<span>⏳</span> ${isAsync ? 'Queuing Ingestion…' : 'Normalizing & Indexing…'}`;
-    feedback.innerHTML = '<span style="color:var(--accent);">Processing file and extracting structural skeleton…</span>';
+    btn.innerHTML = `<i data-lucide="loader-2" class="spin"></i> <span>${isAsync ? 'Queuing Ingestion…' : 'Normalizing & Indexing…'}</span>`;
+    feedback.innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px; color:var(--amber-400); font-family:var(--font-mono); font-size:12px;">
+            <i data-lucide="loader-2" class="spin"></i>
+            <span>Pruning boilerplate, generating AST skeleton, and calculating embeddings…</span>
+        </div>
+    `;
+    renderIcons();
 
     try {
         const formData = new FormData();
@@ -129,28 +163,39 @@ $('btn-upload').addEventListener('click', async () => {
         });
 
         if (result.status === 'queued') {
-            feedback.innerHTML = `<span style="color:var(--success);">✓ ${result.message}</span>`;
+            feedback.innerHTML = `
+                <div style="display:flex; align-items:center; gap:8px; color:var(--signal-green); font-family:var(--font-mono); font-size:12.5px;">
+                    <i data-lucide="check-circle-2"></i>
+                    <span>${escapeHtml(result.message)}</span>
+                </div>
+            `;
         } else {
             const savings = result.tokenomics?.size_reduction_pct ?? 0;
             feedback.innerHTML = `
-                <div style="color:var(--success); font-weight:600; margin-bottom:8px;">
-                    ✓ Indexed ${result.files_count} files (${result.total_chunks} chunks) in ${result.elapsed_ms} ms.
+                <div style="display:flex; align-items:center; gap:8px; color:var(--signal-green); font-weight:700; margin-bottom:6px;">
+                    <i data-lucide="check-circle-2"></i>
+                    <span>Indexed ${result.files_count} files (${result.total_chunks} chunks) in ${result.elapsed_ms} ms</span>
                 </div>
-                <div style="font-size:12px; color:var(--text-muted);">
-                    Boilerplate Reduction: <b>${savings}%</b> · Estimated Tokens: <b>${(result.tokenomics?.estimated_tokens ?? 0).toLocaleString()}</b>
+                <div style="font-family:var(--font-mono); font-size:11.5px; color:var(--text-secondary); margin-left: 24px;">
+                    Boilerplate Reduction: <strong style="color:var(--amber-400);">${savings}%</strong> · Estimated Tokens: <strong>${(result.tokenomics?.estimated_tokens ?? 0).toLocaleString()}</strong>
                 </div>
             `;
-            // Render file summary table if files returned
             if (result.files?.length) {
                 renderFilesTable(result.files);
             }
         }
         await refreshStatus();
     } catch (err) {
-        feedback.innerHTML = `<span style="color:#f87171;">✕ Ingestion failed: ${err.message}</span>`;
+        feedback.innerHTML = `
+            <div style="display:flex; align-items:center; gap:8px; color:var(--signal-red); font-family:var(--font-mono); font-size:12px;">
+                <i data-lucide="alert-triangle"></i>
+                <span>Ingestion failed: ${escapeHtml(err.message)}</span>
+            </div>
+        `;
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<span>⚡</span> Normalize & Index Repository';
+        btn.innerHTML = `<i data-lucide="zap"></i> <span>Normalize & Index Repository</span>`;
+        renderIcons();
     }
 });
 
@@ -162,14 +207,18 @@ const renderFilesTable = (files) => {
     const tbody = $('ingested-files-body');
     tbody.innerHTML = files.map((f) => `
         <tr>
-            <td style="font-family:monospace; color:var(--accent); font-weight:600;">${f.path}</td>
-            <td>${(f.raw_size / 1024).toFixed(1)} KB</td>
-            <td>${(f.clean_size / 1024).toFixed(1)} KB</td>
-            <td style="color:var(--success); font-weight:600;">-${f.reduction_pct}%</td>
-            <td>${f.chunks}</td>
-            <td>${f.tokens.toLocaleString()}</td>
+            <td style="font-family:var(--font-mono); color:var(--signal-blue); font-weight:600;">
+                <i data-lucide="file-code" style="width:13px; height:13px; margin-right:4px;"></i>
+                ${escapeHtml(f.path)}
+            </td>
+            <td style="font-family:var(--font-mono);">${(f.raw_size / 1024).toFixed(1)} KB</td>
+            <td style="font-family:var(--font-mono);">${(f.clean_size / 1024).toFixed(1)} KB</td>
+            <td style="font-family:var(--font-mono); color:var(--signal-green); font-weight:700;">-${f.reduction_pct}%</td>
+            <td style="font-family:var(--font-mono);">${f.chunks}</td>
+            <td style="font-family:var(--font-mono);">${f.tokens.toLocaleString()}</td>
         </tr>
     `).join('');
+    renderIcons();
 };
 
 // Hybrid Search
@@ -181,10 +230,14 @@ const executeSearch = async () => {
     const resultsContainer = $('search-results');
     resultsContainer.innerHTML = `
         <div class="empty-state">
-            <div class="empty-icon">◌</div>
-            <p>Running hybrid search (BM25 lexical + dense semantic embeddings)…</p>
+            <div class="empty-icon-wrap">
+                <i data-lucide="loader-2" class="spin"></i>
+            </div>
+            <h4>Synthesizing Context Retrieval</h4>
+            <p>Executing dual-score fusion (BM25 lexical + ONNX 384d semantic dense embeddings)…</p>
         </div>
     `;
+    renderIcons();
 
     try {
         const payload = await api('/api/search', {
@@ -196,22 +249,29 @@ const executeSearch = async () => {
         if (!payload.results?.length) {
             resultsContainer.innerHTML = `
                 <div class="empty-state">
-                    <div class="empty-icon">⌕</div>
-                    <p>No relevant context chunks found matching the query.</p>
+                    <div class="empty-icon-wrap">
+                        <i data-lucide="search-x"></i>
+                    </div>
+                    <h4>No Matching Context Chunks</h4>
+                    <p>No repository context chunks matched the criteria. Try adjusting keywords or ingesting code.</p>
                 </div>
             `;
+            renderIcons();
             return;
         }
 
         resultsContainer.innerHTML = payload.results.map((item, idx) => `
             <div class="chunk-card">
                 <div class="chunk-header">
-                    <div class="chunk-path">#${idx + 1} ${item.path} (L${item.start_line} - L${item.end_line})</div>
+                    <div class="chunk-path">
+                        <i data-lucide="file-code-2" style="width:13px; height:13px; margin-right:4px;"></i>
+                        #${idx + 1} ${escapeHtml(item.path)} (L${item.start_line} - L${item.end_line})
+                    </div>
                     <div class="score-pills">
                         <span class="score-pill hybrid" title="Combined Hybrid Score">Score: ${item.score}</span>
                         <span class="score-pill lexical" title="BM25 Lexical Score">BM25: ${item.lexical_score}</span>
                         <span class="score-pill semantic" title="Dense Cosine Semantic Score">Vector: ${item.semantic_score}</span>
-                        <span class="score-pill" style="background:#1e293b; color:var(--text-muted);">${item.tokens} tokens</span>
+                        <span class="score-pill" style="background:rgba(255,255,255,0.05); color:var(--text-secondary);">${item.tokens} tok</span>
                     </div>
                 </div>
                 <div class="chunk-code">${escapeHtml(item.markdown)}</div>
@@ -219,13 +279,23 @@ const executeSearch = async () => {
         `).join('');
 
         await refreshStatus();
+        renderIcons();
     } catch (err) {
-        resultsContainer.innerHTML = `<div class="empty-state"><p style="color:#f87171;">${err.message}</p></div>`;
+        resultsContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon-wrap" style="color:var(--signal-red);">
+                    <i data-lucide="alert-octagon"></i>
+                </div>
+                <h4>Search Error</h4>
+                <p style="color:var(--signal-red); font-family:var(--font-mono);">${escapeHtml(err.message)}</p>
+            </div>
+        `;
+        renderIcons();
     }
 };
 
-$('btn-search').addEventListener('click', executeSearch);
-$('search-query').addEventListener('keydown', (e) => {
+$('btn-search')?.addEventListener('click', executeSearch);
+$('search-query')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') executeSearch();
 });
 
@@ -238,36 +308,43 @@ $$('.preset-chip').forEach((chip) => {
 });
 
 // Limit Slider
-$('search-limit').addEventListener('input', (e) => {
+$('search-limit')?.addEventListener('input', (e) => {
     $('search-limit-val').textContent = e.target.value;
 });
 
 // Skeleton Loader
 const loadSkeleton = async () => {
     const box = $('skeleton-display');
-    box.textContent = 'Loading repository skeleton…';
+    box.textContent = 'Loading repository AST skeleton…';
     try {
         const data = await api('/api/skeleton');
-        box.textContent = data.skeleton || 'No skeleton available.';
+        box.textContent = data.skeleton || '# Ingest a repository to view its structural skeleton.';
     } catch {
-        box.textContent = 'Failed to load skeleton.';
+        box.textContent = '# Failed to load skeleton from server.';
     }
 };
 
 $('btn-copy-skeleton')?.addEventListener('click', () => {
     const text = $('skeleton-display').textContent;
     navigator.clipboard.writeText(text);
-    alert('Project skeleton copied to clipboard!');
+    const btn = $('btn-copy-skeleton');
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = `<i data-lucide="check"></i> <span>Copied!</span>`;
+    renderIcons();
+    setTimeout(() => {
+        btn.innerHTML = originalHtml;
+        renderIcons();
+    }, 2000);
 });
 
 // Local LLM Inference
-$('btn-assemble-prompt').addEventListener('click', async () => {
+$('btn-assemble-prompt')?.addEventListener('click', async () => {
     const query = $('infer-query').value.trim();
     if (!query) return;
 
     const budget = parseInt($('infer-budget').value, 10) || 2048;
     const previewBox = $('prompt-preview');
-    previewBox.textContent = 'Assembling pruned context into prompt…';
+    previewBox.textContent = 'Assembling pruned context into budget…';
 
     try {
         const data = await api('/api/context/assemble', {
@@ -276,14 +353,14 @@ $('btn-assemble-prompt').addEventListener('click', async () => {
             body: JSON.stringify({ query, token_budget: budget }),
         });
 
-        $('prompt-token-meter').textContent = `${data.assembled_prompt_tokens} tokens (${data.budget_utilization_pct}% budget utilized)`;
+        $('prompt-token-meter').textContent = `${data.assembled_prompt_tokens} tokens (${data.budget_utilization_pct}% budget)`;
         previewBox.textContent = data.prompt;
     } catch (err) {
         previewBox.textContent = `Assembly failed: ${err.message}`;
     }
 });
 
-$('btn-run-infer').addEventListener('click', async () => {
+$('btn-run-infer')?.addEventListener('click', async () => {
     const query = $('infer-query').value.trim();
     if (!query) return;
 
@@ -293,8 +370,15 @@ $('btn-run-infer').addEventListener('click', async () => {
     const answerBox = $('inference-answer');
 
     btn.disabled = true;
-    btn.innerHTML = '<span>⏳</span> Reasoning…';
-    answerBox.innerHTML = '<p style="color:var(--text-muted);">Generating answer from local grounded context…</p>';
+    btn.innerHTML = `<i data-lucide="loader-2" class="spin"></i> <span>Reasoning…</span>`;
+    answerBox.innerHTML = `
+        <div class="empty-state" style="padding: 24px;">
+            <div class="empty-icon-wrap"><i data-lucide="loader-2" class="spin"></i></div>
+            <h4>Synthesizing Reasoning Response</h4>
+            <p>Evaluating grounded codebase chunks on local LLM endpoint…</p>
+        </div>
+    `;
+    renderIcons();
 
     try {
         const data = await api('/api/infer', {
@@ -305,23 +389,34 @@ $('btn-run-infer').addEventListener('click', async () => {
 
         answerBox.innerHTML = `
             <div class="answer-content">${escapeHtml(data.answer)}</div>
-            <div style="font-size:12px; color:var(--text-dim); display:flex; justify-content:space-between; margin-top:8px;">
-                <span>Engine: <b>${data.engine}</b> · Model: <b>${data.model_used}</b></span>
-                <span>Latency: <b>${data.latency_ms} ms</b> · Tokens: <b>${data.total_tokens}</b></span>
+            <div style="font-family:var(--font-mono); font-size:11.5px; color:var(--text-muted); display:flex; justify-content:space-between; margin-top:12px; padding-top:10px; border-top:1px solid var(--border-subtle);">
+                <span>Engine: <strong style="color:var(--text-primary);">${escapeHtml(data.engine)}</strong> · Model: <strong style="color:var(--amber-400);">${escapeHtml(data.model_used)}</strong></span>
+                <span>Latency: <strong style="color:var(--signal-green);">${data.latency_ms} ms</strong> · Tokens: <strong>${data.total_tokens}</strong></span>
             </div>
             <div class="citation-list">
-                ${data.sources?.map((s) => `<span class="citation-badge">📄 ${s.path} (${s.score})</span>`).join('') || ''}
+                ${data.sources?.map((s) => `
+                    <span class="citation-badge">
+                        <i data-lucide="file-text" style="width:11px; height:11px;"></i>
+                        ${escapeHtml(s.path)} (${s.score})
+                    </span>
+                `).join('') || ''}
             </div>
         `;
     } catch (err) {
-        answerBox.innerHTML = `<p style="color:#f87171;">Inference error: ${err.message}</p>`;
+        answerBox.innerHTML = `
+            <div style="color:var(--signal-red); font-family:var(--font-mono); font-size:12.5px;">
+                <i data-lucide="alert-triangle" style="margin-right:4px;"></i>
+                Inference error: ${escapeHtml(err.message)}
+            </div>
+        `;
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<span>⚡</span> Run Local Inference';
+        btn.innerHTML = `<i data-lucide="zap"></i> <span>Run Local Inference</span>`;
+        renderIcons();
     }
 });
 
-$('infer-budget').addEventListener('input', (e) => {
+$('infer-budget')?.addEventListener('input', (e) => {
     $('infer-budget-val').textContent = `${e.target.value} tokens`;
 });
 
@@ -334,10 +429,13 @@ const loadAnalytics = async () => {
         const topicsContainer = $('top-topics-cloud');
         if (data.top_topics?.length) {
             topicsContainer.innerHTML = data.top_topics.map((t) => `
-                <div class="topic-tag">#${t.term} <small style="opacity:0.7">(${t.weight})</small></div>
+                <div class="topic-tag">
+                    <i data-lucide="hash" style="width:11px; height:11px; margin-right:2px;"></i>
+                    ${escapeHtml(t.term)} <small style="opacity:0.6; margin-left:4px;">${t.weight}</small>
+                </div>
             `).join('');
         } else {
-            topicsContainer.innerHTML = '<span style="color:var(--text-dim);">No topics extracted yet. Ingest a repository first.</span>';
+            topicsContainer.innerHTML = '<span class="empty-cloud-text">No topics extracted yet. Ingest a repository first.</span>';
         }
 
         // Extension distribution
@@ -345,14 +443,14 @@ const loadAnalytics = async () => {
         if (data.extension_distribution?.length) {
             extBody.innerHTML = data.extension_distribution.map((e) => `
                 <tr>
-                    <td style="font-family:monospace; color:var(--accent);">${e.extension}</td>
-                    <td>${e.count}</td>
-                    <td>${(e.total_bytes / 1024).toFixed(1)} KB</td>
-                    <td>${e.total_tokens?.toLocaleString() || 0}</td>
+                    <td style="font-family:var(--font-mono); color:var(--amber-400); font-weight:600;">${escapeHtml(e.extension)}</td>
+                    <td style="font-family:var(--font-mono);">${e.count}</td>
+                    <td style="font-family:var(--font-mono);">${(e.total_bytes / 1024).toFixed(1)} KB</td>
+                    <td style="font-family:var(--font-mono);">${e.total_tokens?.toLocaleString() || 0}</td>
                 </tr>
             `).join('');
         } else {
-            extBody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim); text-align:center;">No data available.</td></tr>';
+            extBody.innerHTML = '<tr><td colspan="4" style="color:var(--text-dim); text-align:center; padding:24px;">No data available.</td></tr>';
         }
 
         // Latency
@@ -360,6 +458,7 @@ const loadAnalytics = async () => {
         $('lat-avg').textContent = `${lat.avg_latency_ms || 0} ms`;
         $('lat-p50').textContent = `${lat.p50_latency_ms || 0} ms`;
         $('lat-p95').textContent = `${lat.p95_latency_ms || 0} ms`;
+        renderIcons();
     } catch (err) {
         console.error('Failed to load analytics:', err);
     }
@@ -367,7 +466,7 @@ const loadAnalytics = async () => {
 
 const escapeHtml = (str) => {
     if (!str) return '';
-    return str
+    return String(str)
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;')
@@ -375,5 +474,24 @@ const escapeHtml = (str) => {
         .replaceAll("'", '&#039;');
 };
 
-// Initial load
+// Animation utility
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .spin {
+        animation: spin 1s linear infinite;
+        display: inline-block;
+    }
+`;
+document.head.appendChild(style);
+
+// Initial bootstrap
+document.addEventListener('DOMContentLoaded', () => {
+    renderIcons();
+    refreshStatus();
+});
+renderIcons();
 refreshStatus();
